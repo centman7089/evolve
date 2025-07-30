@@ -13,9 +13,7 @@ const registrationSchema = new mongoose.Schema({
     trim: true
   },
   phone: String,
-  country: String,
-  state: String,
-  seatReservations: Number,
+  location: String,
   courseOfInterest: String,
   selectedSession: {
     type: String,

@@ -14,9 +14,7 @@ const registerUser = async (req, res) => {
       lastName,
       email,
       phone,
-      country,
-      state,
-      seatReservations,
+      location,
       courseOfInterest,
       selectedSession
     } = req.body;
@@ -47,52 +45,85 @@ const registerUser = async (req, res) => {
       lastName,
       email: normalizedEmail,
       phone,
-      country,
-      state,
-      seatReservations,
+      location,
       courseOfInterest,
       selectedSession: mode
     });
 
     await registration.save();
 
-    // Count all registered users
-    const seatCount = await Registration.countDocuments();
-
     res.status(201).json({
       message: 'Registration successful',
       user: registration,
-      seatCount
     });
   } catch (error) {
     res.status(500).json({ message: 'Registration failed', error: error.message });
   }
 };
 
+// const getAllRegistrations = async (req, res) => {
+//     try {
+//       const registrations = await Registration.find().sort({ registeredAt: -1 }); // latest first
+//       res.status(200).json(registrations);
+//     } catch ( error )
+//     {
+//       console.log(error);
+//       res.status(500).json({ message: 'Failed to fetch registrations', error: error.message });
+//     }
+// };
+
 const getAllRegistrations = async (req, res) => {
-    try {
-      const registrations = await Registration.find().sort({ registeredAt: -1 }); // latest first
-      res.status(200).json(registrations);
-    } catch ( error )
-    {
-      console.log(error);
-      res.status(500).json({ message: 'Failed to fetch registrations', error: error.message });
-    }
+  try {
+    const page = parseInt(req.query.page) || 1;      // Default to page 1
+    const limit = parseInt(req.query.limit) || 25;   // Default to 25 records per page
+    const skip = (page - 1) * limit;
+
+    const total = await Registration.countDocuments(); // Total number of records
+    const registrations = await Registration.find()
+      .sort({ createdAt: -1 }) // Assuming createdAt is the correct field
+      .skip(skip)
+      .limit(limit);
+
+    res.status(200).json({
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      totalRecords: total,
+      registrations
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message: 'Failed to fetch registrations',
+      error: error.message
+    });
+  }
 };
+
+
+
+
 const getUsersFiltered = async (req, res) => {
   try {
-    const { country, state, date } = req.query;
+    const { search, session, date, location } = req.query;
 
-    let query = {};
+    const query = {};
 
-    if (country) {
-      query.country = country;
+    // 🔍 Search by name or email
+    if (search) {
+      query.$or = [
+        { firstName: new RegExp(search, 'i') },
+        { lastName: new RegExp(search, 'i') },
+        { email: new RegExp(search, 'i') }
+      ];
     }
 
-    if (state) {
-      query.state = state;
+    // 🎯 Filter strictly by session: Morning or Evening
+    const allowedSessions = ['Morning', 'Evening'];
+    if (session && allowedSessions.includes(session)) {
+      query.selectedSession = session;
     }
 
+    // 📆 Filter by specific date
     if (date) {
       const start = new Date(date);
       const end = new Date(date);
@@ -100,12 +131,18 @@ const getUsersFiltered = async (req, res) => {
       query.createdAt = { $gte: start, $lte: end };
     }
 
-    const users = await Registration.find(query);
-    res.json(users);
+    // 🌍 Filter by exact location string
+    if (location) {
+      query.location = location;
+    }
+
+    const users = await Registration.find(query).sort({ createdAt: -1 });
+    res.status(200).json(users);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 };
+
 
 // Export to Excel
 const exportUsersAsExcel = async (req, res) => {
@@ -153,4 +190,20 @@ const exportUsersAsExcel = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, getAllRegistrations, getUsersFiltered, exportUsersAsExcel };
+const deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const deletedUser = await Registration.findByIdAndDelete(id);
+
+    if (!deletedUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json({ message: 'User deleted successfully', user: deletedUser });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to delete user', error: err.message });
+  }
+};
+
+module.exports = { registerUser, getAllRegistrations, getUsersFiltered, exportUsersAsExcel, deleteUser };
