@@ -105,43 +105,128 @@ const getAllRegistrations = async (req, res) => {
 const getUsersFiltered = async (req, res) => {
   try {
     const { search, session, date, location } = req.query;
-
     const query = {};
 
-    // 🔍 Search by name or email
+    // Case-sensitive search (only if needed)
     if (search) {
       query.$or = [
-        { firstName: new RegExp(search, 'i') },
-        { lastName: new RegExp(search, 'i') },
-        { email: new RegExp(search, 'i') }
+        { firstName: search }, // exact match
+        { lastName: search },  // exact match
+        { email: search }      // exact match
       ];
     }
 
-    // 🎯 Filter strictly by session: Morning or Evening
-    const allowedSessions = ['Morning', 'Evening'];
-    if (session && allowedSessions.includes(session)) {
-      query.selectedSession = session;
+    // Strict session filter (case-sensitive)
+    if (session) {
+      query.selectedSession = session; // exact case-sensitive match
     }
 
-    // 📆 Filter by specific date
+    // Exact date filter (whole day)
     if (date) {
-      const start = new Date(date);
-      const end = new Date(date);
-      end.setHours(23, 59, 59, 999);
-      query.createdAt = { $gte: start, $lte: end };
+      const startDate = new Date(date);
+      startDate.setHours(0, 0, 0, 0);
+      
+      const endDate = new Date(date);
+      endDate.setHours(23, 59, 59, 999);
+      
+      query.createdAt = { 
+        $gte: startDate, 
+        $lte: endDate 
+      };
     }
 
-    // 🌍 Filter by exact location string
+    // Strict location filter (case-sensitive)
     if (location) {
-      query.location = location;
+      query.location = location; // exact case-sensitive match
     }
 
-    const users = await Registration.find(query).sort({ createdAt: -1 });
-    res.status(200).json(users);
+    // Return nothing if no filters provided
+    if (Object.keys(query).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one filter parameter is required'
+      });
+    }
+
+    const users = await Registration.find(query)
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (users.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No records found matching all criteria exactly',
+        filtersUsed: {
+          search,
+          session,
+          date,
+          location
+        }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      filtersApplied: {
+        search,
+        session,
+        date,
+        location
+      },
+      data: users
+    });
+
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    console.error('Strict filter error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during strict filtering',
+      error: err.message
+    });
   }
 };
+// Helper function to escape regex special characters
+function escapeRegex(string) {
+  return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+}
+
+
+
+const searchProduct = async(req,res)=>{
+    try{
+        const query = req.query.q 
+
+        const regex = new RegExp(query,'i','g')
+
+        const product = await Registration.find({
+            "$or" : [
+                {
+                    location : regex
+                },
+                {
+                    firstName : regex
+                }
+            ]
+
+        })
+
+
+        res.json({
+            data  : product ,
+            message : "Search users",
+            error : false,
+            success : true
+        })
+    }catch(err){
+        res.json({
+            message : err.message || err,
+            error : true,
+            success : false
+        })
+    }
+}
+
 
 
 // Export to Excel
@@ -206,4 +291,4 @@ const deleteUser = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, getAllRegistrations, getUsersFiltered, exportUsersAsExcel, deleteUser };
+module.exports = { registerUser, getAllRegistrations, getUsersFiltered, exportUsersAsExcel, deleteUser, searchProduct};

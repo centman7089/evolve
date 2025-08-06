@@ -5,7 +5,7 @@ const {
   getAllRegistrations,
   getUsersFiltered,
   exportUsersAsExcel,
-  deleteUser
+  deleteUser, searchProduct
 } = require('../controllers/registrationControllers');
 
 // POST - Register user
@@ -15,7 +15,8 @@ router.post('/register', registerUser);
 router.get( '/registrations', getAllRegistrations );
 router.get( '/filter', getUsersFiltered );
 router.get( '/export/excel', exportUsersAsExcel );
-router.delete('/delete/:id', deleteUser);
+router.delete( '/delete/:id', deleteUser );
+router.get("/search",searchProduct)
 
 
 module.exports = router;
